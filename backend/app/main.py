@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .db import Base, engine, get_db
 from .models import Appointment, BlockedTime, Customer, Style
 
-app=FastAPI(title="Judith's Hair Room API",version="0.3.0")
+app=FastAPI(title="Judith's Hair Room API",version="0.4.0")
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS','*').split(',')],allow_methods=['*'],allow_headers=['*'])
 class StyleOut(BaseModel):
  id:str; name:str; min_price:float; max_price:float; estimated_duration_minutes:int; required_hair:str
@@ -26,14 +26,12 @@ def startup():
  if engine.dialect.name=='postgresql':
   with engine.begin() as conn:
    conn.execute(text('CREATE EXTENSION IF NOT EXISTS btree_gist'))
-   conn.execute(text("""CREATE INDEX IF NOT EXISTS ix_active_appointments_date ON appointments (appointment_date) WHERE status NOT IN ('CANCELLED','NO_SHOW')"""))
-   conn.execute(text("""DO $$ BEGIN CREATE INDEX IF NOT EXISTS ix_active_appointments_range ON appointments USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)')) WHERE status NOT IN ('CANCELLED','NO_SHOW'); EXCEPTION WHEN undefined_function THEN NULL; END $$;"""))
+   conn.execute(text("""DO $$ BEGIN CREATE INDEX ix_active_appointments_range ON appointments USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)')) WHERE status NOT IN ('CANCELLED','NO_SHOW'); EXCEPTION WHEN duplicate_table THEN NULL; END $$;"""))
+   conn.execute(text("""DO $$ BEGIN ALTER TABLE appointments ADD CONSTRAINT appointments_no_overlap EXCLUDE USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)') WITH &&) WHERE (status NOT IN ('CANCELLED','NO_SHOW')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;"""))
  with Session(engine) as db:
-  if not db.scalar(select(Style).limit(1)):
-   db.add_all([Style(name=n,min_price=lo,max_price=hi,estimated_duration_minutes=d,required_hair=h) for n,lo,hi,d,h in SEEDS]);db.commit()
+  if not db.scalar(select(Style).limit(1)):db.add_all([Style(name=n,min_price=lo,max_price=hi,estimated_duration_minutes=d,required_hair=h) for n,lo,hi,d,h in SEEDS]);db.commit()
 def dto(db,a):
- c=db.get(Customer,a.customer_id);s=db.get(Style,a.style_id)
- return AppointmentOut(id=a.id,customer_name=c.name,phone=c.phone,style_id=a.style_id,style_name=s.name,date=a.appointment_date,start_time=a.start_time,expected_end_time=a.expected_end_time,agreed_price=a.agreed_price,deposit_amount=a.deposit_amount,balance=a.balance,status=a.status,payment_status=a.payment_status)
+ c=db.get(Customer,a.customer_id);s=db.get(Style,a.style_id);return AppointmentOut(id=a.id,customer_name=c.name,phone=c.phone,style_id=a.style_id,style_name=s.name,date=a.appointment_date,start_time=a.start_time,expected_end_time=a.expected_end_time,agreed_price=a.agreed_price,deposit_amount=a.deposit_amount,balance=a.balance,status=a.status,payment_status=a.payment_status)
 def conflicts(db,day,start,end):
  if db.scalar(select(Appointment.id).where(Appointment.appointment_date==day,Appointment.status.not_in(['CANCELLED','NO_SHOW']),Appointment.start_time<end,Appointment.expected_end_time>start).limit(1)):return 'appointment_conflict'
  if db.scalar(select(BlockedTime.id).where(BlockedTime.blocked_date==day,BlockedTime.start_time<end,BlockedTime.end_time>start).limit(1)):return 'blocked_time'
