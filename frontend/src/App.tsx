@@ -1,91 +1,57 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CheckCircle2, Clock3, LayoutDashboard, Plus, Scissors, UserRound, XCircle, WalletCards, UsersRound } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock3, LayoutDashboard, Plus, Scissors, UserRound, XCircle, WalletCards, UsersRound, Search, MoreHorizontal, Phone, Pencil, CreditCard, UserX, Ban, Lock, Trash2 } from 'lucide-react'
 import { api } from './api'
 
-type Appointment = { id:string; customer_name:string; phone:string; style_name:string; date:string; start_time:string; expected_end_time:string; agreed_price:number; deposit_amount:number; balance:number; status:string; payment_status:string }
-type Style = { id:string; name:string; min_price:number; max_price:number; estimated_duration_minutes:number; required_hair:string }
-type Dashboard = { today:string; occupied:boolean; appointments:number; completed:number; unpaid_deposits:number; revenue:number }
+type Appointment={id:string;customer_id:string;customer_name:string;phone:string;style_id:string;style_name:string;date:string;start_time:string;expected_end_time:string;agreed_price:number;deposit_amount:number;balance:number;status:string;payment_status:string}
+type Style={id:string;name:string;min_price:number;max_price:number;estimated_duration_minutes:number;required_hair:string}
+type Customer={id:string;name:string;phone:string;email?:string;preferred_styles:string;notes:string;created_at:string;last_visit?:string;appointments:number}
+type Dashboard={today:string;occupied:boolean;appointments:number;completed:number;unpaid_deposits:number;revenue:number;outstanding:number;no_shows:number}
+type Block={id:string;date:string;start_time:string;end_time:string;reason:string}
+const money=(n:number)=>`P${Number(n||0).toLocaleString()}`
+const localDate=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+const prettyDate=(v:string)=>new Date(`${v}T12:00:00`).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})
 
-const money = (n:number) => `P${n.toLocaleString()}`
-const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
-const prettyDate = (value:string) => new Date(`${value}T12:00:00`).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})
-
-export default function App() {
-  const [tab, setTab] = useState<'today'|'book'>('today')
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [styles, setStyles] = useState<Style[]>([])
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  const [now, setNow] = useState(new Date())
-  const [form, setForm] = useState({customer_name:'',phone:'',style_id:'',date:localDate(),start_time:'10:00',agreed_price:''})
-
-  async function load() {
-    try {
-      const [a,s,d] = await Promise.all([api.appointments(), api.styles(), api.dashboard()])
-      setAppointments(a); setStyles(s); setDashboard(d)
-    } catch(e:any) { setMessage(e.message || 'Could not load the dashboard.') }
-  }
-  useEffect(()=>{ load(); const timer=setInterval(()=>setNow(new Date()),30000); return ()=>clearInterval(timer) },[])
-
-  const today = localDate()
-  const todays = useMemo(()=>appointments.filter(a=>a.date===today && a.status!=='CANCELLED').sort((a,b)=>a.start_time.localeCompare(b.start_time)),[appointments,today])
-  const active = todays.find(a=>a.status==='IN_PROGRESS')
-  const currentTime = now.toTimeString().slice(0,5)
-  const next = todays.find(a=>['PENDING','CONFIRMED'].includes(a.status) && a.start_time >= currentTime)
-  const upcoming = appointments.filter(a=>a.date>today && ['PENDING','CONFIRMED'].includes(a.status)).sort((a,b)=>`${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`)).slice(0,3)
-  const occupied = !!active
-
-  async function action(fn:()=>Promise<any>) { setBusy(true); setMessage(''); try { await fn(); await load() } catch(e:any) { setMessage(typeof e.message==='string'?e.message:'Action failed.') } finally { setBusy(false) } }
-
-  async function create(e:React.FormEvent) {
-    e.preventDefault(); const style=styles.find(s=>s.id===form.style_id); if(!style)return
-    const start = new Date(`${form.date}T${form.start_time}:00`)
-    const end = new Date(start.getTime()+style.estimated_duration_minutes*60000)
-    await action(()=>api.createAppointment({customer_name:form.customer_name.trim(),phone:form.phone.trim(),style_id:form.style_id,date:form.date,start_time:form.start_time,expected_end_time:end.toTimeString().slice(0,5),agreed_price:Number(form.agreed_price),deposit_amount:Number(form.agreed_price)*.5}))
-    setTab('today'); setForm({...form,customer_name:'',phone:'',style_id:'',agreed_price:''})
-  }
-
-  return <div className="app-shell">
-    <header className="topbar">
-      <div className="brand"><div className="brand-mark"><Scissors/></div><div><p className="eyebrow">DIGITAL SECRETARY</p><h1>Judith's Hair Room</h1><p className="date-line">{now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}</p></div></div>
-      <div className={occupied?'status occupied':'status available'}><span/> {occupied?'OCCUPIED':'AVAILABLE'}</div>
-    </header>
-
-    <main>
-      {tab==='today' ? <>
-        <section className="hero-card">
-          <div className="hero-copy"><p className="eyebrow">{active?'CURRENT CLIENT':'RIGHT NOW'}</p><h2>{active?`Working with ${active.customer_name}`:next?`Next: ${next.customer_name}`:'You're free'}</h2><p className="muted">{active?`${active.style_name} · started at ${active.start_time}`:next?`${next.start_time} · ${next.style_name}`:'No appointment is being worked on right now.'}</p></div>
-          {active?<button className="done" disabled={busy} onClick={()=>action(()=>api.complete(active.id))}><CheckCircle2/> DONE</button>:next?<button className="primary" disabled={busy} onClick={()=>action(()=>api.start(next.id))}><Clock3/> START</button>:<button className="primary" onClick={()=>setTab('book')}><Plus/> BOOK CLIENT</button>}
-        </section>
-
-        {message&&<div className="alert">{message}</div>}
-
-        <section className="stats-grid">
-          <div className="stat-card"><CalendarDays/><div><span>Today</span><strong>{dashboard?.appointments ?? todays.length}</strong></div></div>
-          <div className="stat-card"><CheckCircle2/><div><span>Completed</span><strong>{dashboard?.completed ?? 0}</strong></div></div>
-          <div className="stat-card"><WalletCards/><div><span>Revenue</span><strong>{money(dashboard?.revenue ?? 0)}</strong></div></div>
-          <div className="stat-card"><UsersRound/><div><span>Unpaid</span><strong>{dashboard?.unpaid_deposits ?? 0}</strong></div></div>
-        </section>
-
-        <div className="section-head"><div><p className="eyebrow">TODAY · {todays.length} BOOKING{todays.length===1?'':'S'}</p><h2>Appointments</h2></div><button className="icon-btn" onClick={()=>setTab('book')} aria-label="Add appointment"><Plus/></button></div>
-        <section className="timeline">{todays.length===0?<div className="empty"><CalendarDays/><strong>Your day is clear</strong><p>No appointments scheduled for today.</p><button className="primary" onClick={()=>setTab('book')}>Add appointment</button></div>:todays.map(a=><article className={`appointment ${a.status.toLowerCase()} ${a.id===active?.id?'is-active':''}`} key={a.id}><div className="time">{a.start_time}<small>{a.expected_end_time}</small></div><div className="appt-main"><strong>{a.customer_name}</strong><span>{a.style_name}</span><small>{money(a.agreed_price)} · {a.payment_status.replaceAll('_',' ')}</small></div><div className="appt-state">{a.status==='COMPLETED'?<CheckCircle2/>:a.status==='CANCELLED'?<XCircle/>:<Clock3/>}</div></article>)}</section>
-
-        <section className="upcoming-block"><div className="section-head"><div><p className="eyebrow">COMING UP</p><h2>Upcoming</h2></div></div>{upcoming.length===0?<p className="muted">No future bookings yet.</p>:upcoming.map(a=><div className="upcoming-row" key={a.id}><div><strong>{a.customer_name}</strong><span>{a.style_name}</span></div><div><strong>{prettyDate(a.date)}</strong><span>{a.start_time} · {money(a.agreed_price)}</span></div></div>)}</section>
-      </> : <>
-        <div className="section-head"><div><p className="eyebrow">NEW BOOKING</p><h2>Book a client</h2><p className="muted">Reserve the chair and collect the 50% deposit.</p></div><button className="ghost" onClick={()=>setTab('today')}>Back</button></div>
-        <form className="card form" onSubmit={create}>
-          <label>Customer name<input required minLength={2} value={form.customer_name} onChange={e=>setForm({...form,customer_name:e.target.value})} placeholder="e.g. Rudo Moyo"/></label>
-          <label>Phone / WhatsApp<input required minLength={5} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="07..."/></label>
-          <label>Style<select required value={form.style_id} onChange={e=>setForm({...form,style_id:e.target.value})}><option value="">Choose a style</option>{styles.map(s=><option key={s.id} value={s.id}>{s.name} — {money(s.min_price)}–{money(s.max_price)} · {s.required_hair}</option>)}</select></label>
-          <div className="form-row"><label>Date<input required type="date" min={today} value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></label><label>Start time<input required type="time" value={form.start_time} onChange={e=>setForm({...form,start_time:e.target.value})}/></label></div>
-          <label>Agreed price (P)<input required min="1" type="number" value={form.agreed_price} onChange={e=>setForm({...form,agreed_price:e.target.value})} placeholder="Enter final agreed price"/></label>
-          {form.style_id&&<div className="style-note"><strong>{styles.find(s=>s.id===form.style_id)?.name}</strong><span>{styles.find(s=>s.id===form.style_id)?.estimated_duration_minutes} min estimated · {styles.find(s=>s.id===form.style_id)?.required_hair}</span></div>}
-          <div className="deposit"><span>50% Orange Money deposit</span><strong>{money(Number(form.agreed_price||0)*.5)}</strong></div>
-          <button className="primary wide" disabled={busy}>{busy?'Booking…':<><CheckCircle2/> Check availability & book</>}</button>
-        </form>
-      </>}
-    </main>
-    <nav className="bottom-nav"><button className={tab==='today'?'active':''} onClick={()=>setTab('today')}><LayoutDashboard/>Today</button><button className={tab==='book'?'active':''} onClick={()=>setTab('book')}><UserRound/>Book</button></nav>
-  </div>
+export default function App(){
+ const [tab,setTab]=useState<'today'|'book'|'manage'|'customers'|'availability'>('today')
+ const [appointments,setAppointments]=useState<Appointment[]>([]);const [styles,setStyles]=useState<Style[]>([]);const [dashboard,setDashboard]=useState<Dashboard|null>(null);const [customers,setCustomers]=useState<Customer[]>([]);const [blocks,setBlocks]=useState<Block[]>([])
+ const [selected,setSelected]=useState<Appointment|null>(null);const [customer,setCustomer]=useState<any>(null);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [search,setSearch]=useState('');const [now,setNow]=useState(new Date())
+ const [form,setForm]=useState({customer_name:'',phone:'',style_id:'',date:localDate(),start_time:'10:00',agreed_price:''})
+ const [editForm,setEditForm]=useState({customer_name:'',phone:'',style_id:'',date:'',start_time:'',expected_end_time:'',agreed_price:''})
+ const [pay,setPay]=useState({amount:'',payment_type:'BALANCE',reference:''})
+ const [blockForm,setBlockForm]=useState({date:localDate(),start_time:'13:00',end_time:'14:00',reason:'Personal time'})
+ async function load(){try{const [a,s,d,c,b]=await Promise.all([api.appointments(),api.styles(),api.dashboard(),api.customers(search),api.blockedTimes()]);setAppointments(a);setStyles(s);setDashboard(d);setCustomers(c);setBlocks(b)}catch(e:any){setMessage(e.message||'Could not load the digital secretary.')}}
+ useEffect(()=>{load();const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t)},[search])
+ const today=localDate();const todays=useMemo(()=>appointments.filter(a=>a.date===today&&a.status!=='CANCELLED').sort((a,b)=>a.start_time.localeCompare(b.start_time)),[appointments,today]);const active=todays.find(a=>a.status==='IN_PROGRESS');const current=now.toTimeString().slice(0,5);const next=todays.find(a=>['PENDING','CONFIRMED'].includes(a.status)&&a.start_time>=current);const upcoming=appointments.filter(a=>a.date>today&&['PENDING','CONFIRMED'].includes(a.status)).sort((a,b)=>`${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`)).slice(0,4)
+ async function action(fn:()=>Promise<any>){setBusy(true);setMessage('');try{await fn();setSelected(null);await load()}catch(e:any){setMessage(e.message||'Action failed.')}finally{setBusy(false)}}
+ function openEdit(a:Appointment){setSelected(a);setEditForm({customer_name:a.customer_name,phone:a.phone,style_id:a.style_id,date:a.date,start_time:a.start_time,expected_end_time:a.expected_end_time,agreed_price:String(a.agreed_price)})}
+ async function create(e:React.FormEvent){e.preventDefault();const s=styles.find(x=>x.id===form.style_id);if(!s)return;const start=new Date(`${form.date}T${form.start_time}:00`);const end=new Date(start.getTime()+s.estimated_duration_minutes*60000);await action(()=>api.createAppointment({customer_name:form.customer_name.trim(),phone:form.phone.trim(),style_id:form.style_id,date:form.date,start_time:form.start_time,expected_end_time:end.toTimeString().slice(0,5),agreed_price:Number(form.agreed_price),deposit_amount:Number(form.agreed_price)*.5}));setTab('today');setForm({...form,customer_name:'',phone:'',style_id:'',agreed_price:''})}
+ async function saveEdit(e:React.FormEvent){e.preventDefault();if(!selected)return;await action(()=>api.updateAppointment(selected.id,{...editForm,agreed_price:Number(editForm.agreed_price)}))}
+ async function openCustomer(id:string){try{setCustomer(await api.customer(id))}catch(e:any){setMessage(e.message)}}
+ async function savePayment(e:React.FormEvent){e.preventDefault();if(!selected)return;await action(()=>api.payment(selected.id,{amount:Number(pay.amount),payment_type:pay.payment_type,method:'Orange Money',reference:pay.reference||null}));setPay({amount:'',payment_type:'BALANCE',reference:''})}
+ async function createBlock(e:React.FormEvent){e.preventDefault();await action(()=>api.createBlockedTime(blockForm));setBlockForm({...blockForm,start_time:'13:00',end_time:'14:00',reason:'Personal time'})}
+ const nav=(id:typeof tab,label:string,icon:any)=><button className={tab===id?'active':''} onClick={()=>setTab(id)}>{icon}{label}</button>
+ return <div className="app-shell">
+  <header className="topbar"><div className="brand"><div className="brand-mark"><Scissors/></div><div><p className="eyebrow">DIGITAL SECRETARY</p><h1>Judith's Hair Room</h1><p className="date-line">{now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}</p></div></div><div className={active?'status occupied':'status available'}><span/>{active?'OCCUPIED':'AVAILABLE'}</div></header>
+  <main>
+   {message&&<div className="alert">{message}</div>}
+   {tab==='today'&&<>
+    <section className="hero-card"><div><p className="eyebrow">{active?'CURRENT CLIENT':'RIGHT NOW'}</p><h2>{active?`Working with ${active.customer_name}`:next?`Next: ${next.customer_name}`:'You're free'}</h2><p className="muted">{active?`${active.style_name} · started ${active.start_time}`:next?`${next.start_time} · ${next.style_name}`:'No appointment is being worked on.'}</p></div>{active?<button className="done" disabled={busy} onClick={()=>action(()=>api.complete(active.id))}><CheckCircle2/> DONE</button>:next?<button className="primary" disabled={busy} onClick={()=>action(()=>api.start(next.id))}><Clock3/> START</button>:<button className="primary" onClick={()=>setTab('book')}><Plus/> BOOK CLIENT</button>}</section>
+    <section className="stats-grid"><Stat icon={<CalendarDays/>} label="Today" value={dashboard?.appointments??0}/><Stat icon={<CheckCircle2/>} label="Completed" value={dashboard?.completed??0}/><Stat icon={<WalletCards/>} label="Collected" value={money(dashboard?.revenue??0)}/><Stat icon={<UsersRound/>} label="Outstanding" value={money(dashboard?.outstanding??0)}/></section>
+    <div className="section-head"><div><p className="eyebrow">TODAY · {todays.length} BOOKINGS</p><h2>Appointments</h2></div><button className="icon-btn" onClick={()=>setTab('book')}><Plus/></button></div>
+    <section className="timeline">{todays.length===0?<div className="empty"><CalendarDays/><strong>Your day is clear</strong><p>No appointments scheduled.</p></div>:todays.map(a=><AppointmentRow key={a.id} a={a} onClick={()=>openEdit(a)}/>)}</section>
+    <section className="upcoming-block"><div className="section-head"><div><p className="eyebrow">COMING UP</p><h2>Upcoming</h2></div><button className="ghost" onClick={()=>setTab('manage')}>Manage all</button></div>{upcoming.length===0?<p className="muted">No future bookings yet.</p>:upcoming.map(a=><AppointmentRow key={a.id} a={a} onClick={()=>openEdit(a)} compact/>)}</section>
+   </>}
+   {tab==='book'&&<Page title="Book a client" eyebrow="NEW BOOKING" back={()=>setTab('today')}><form className="card form" onSubmit={create}><Field label="Customer name"><input required minLength={2} value={form.customer_name} onChange={e=>setForm({...form,customer_name:e.target.value})} placeholder="e.g. Rudo Moyo"/></Field><Field label="Phone / WhatsApp"><input required minLength={5} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="07..."/></Field><Field label="Style"><select required value={form.style_id} onChange={e=>setForm({...form,style_id:e.target.value})}><option value="">Choose a style</option>{styles.map(s=><option key={s.id} value={s.id}>{s.name} — {money(s.min_price)}–{money(s.max_price)}</option>)}</select></Field><div className="form-row"><Field label="Date"><input required type="date" min={today} value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></Field><Field label="Start time"><input required type="time" value={form.start_time} onChange={e=>setForm({...form,start_time:e.target.value})}/></Field></div><Field label="Agreed price"><input required min="1" type="number" value={form.agreed_price} onChange={e=>setForm({...form,agreed_price:e.target.value})} placeholder="Final price"/></Field><div className="deposit"><span>50% Orange Money deposit</span><strong>{money(Number(form.agreed_price||0)*.5)}</strong></div><button className="primary wide" disabled={busy}>{busy?'Booking…':'Check availability & book'}</button></form></Page>}
+   {tab==='manage'&&<Page title="Booking management" eyebrow="ALL APPOINTMENTS"><div className="toolbar"><div className="search"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer or phone"/></div><button className="primary" onClick={()=>setTab('book')}><Plus/> New</button></div><section className="manage-list">{appointments.length===0?<div className="empty"><CalendarDays/><p>No bookings yet.</p></div>:appointments.map(a=><AppointmentRow key={a.id} a={a} onClick={()=>openEdit(a)}/>)}</section></Page>}
+   {tab==='customers'&&<Page title="Customers" eyebrow="CLIENT BOOK"><div className="search full"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or phone"/></div><section className="customer-list">{customers.length===0?<div className="empty"><UsersRound/><p>No customers found.</p></div>:customers.map(c=><button className="customer-row" key={c.id} onClick={()=>openCustomer(c.id)}><span className="avatar">{c.name.slice(0,1).toUpperCase()}</span><span><strong>{c.name}</strong><small>{c.phone} · {c.appointments} visit{c.appointments===1?'':'s'}</small></span><MoreHorizontal/></button>)}</section></Page>}
+   {tab==='availability'&&<Page title="Availability" eyebrow="CHAIR CONTROL"><div className="availability-card card"><div><p className="eyebrow">BLOCK TIME</p><h3>Protect Judith's time</h3><p className="muted">Lunch, errands, personal appointments, holidays or emergencies.</p></div><form className="form" onSubmit={createBlock}><Field label="Date"><input type="date" required value={blockForm.date} onChange={e=>setBlockForm({...blockForm,date:e.target.value})}/></Field><div className="form-row"><Field label="Start"><input type="time" required value={blockForm.start_time} onChange={e=>setBlockForm({...blockForm,start_time:e.target.value})}/></Field><Field label="End"><input type="time" required value={blockForm.end_time} onChange={e=>setBlockForm({...blockForm,end_time:e.target.value})}/></Field></div><Field label="Reason"><input required value={blockForm.reason} onChange={e=>setBlockForm({...blockForm,reason:e.target.value})}/></Field><button className="primary">Block this time</button></form></div><div className="section-head"><div><p className="eyebrow">PROTECTED TIME</p><h2>Blocked periods</h2></div></div>{blocks.map(b=><div className="block-row" key={b.id}><div><strong>{prettyDate(b.date)}</strong><span>{b.start_time}–{b.end_time} · {b.reason}</span></div><button className="icon-btn danger" onClick={()=>action(()=>api.deleteBlockedTime(b.id))}><Trash2/></button></div>)}</Page>}
+  </main>
+  {selected&&<div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">BOOKING</p><h2>{selected.customer_name}</h2><p className="muted">{selected.style_name} · {prettyDate(selected.date)} · {selected.start_time}</p></div><button className="ghost" onClick={()=>setSelected(null)}>Close</button></div><div className="quick-actions"><a className="action-chip" href={`tel:${selected.phone}`}><Phone/> Call</a><button className="action-chip" onClick={()=>openCustomer(selected.customer_id)}><UserRound/> Customer</button><span className={`pill ${selected.status.toLowerCase()}`}>{selected.status.replace('_',' ')}</span></div>{!['COMPLETED','CANCELLED','NO_SHOW'].includes(selected.status)&&<form className="form card" onSubmit={saveEdit}><div className="modal-title"><Pencil/> Edit booking</div><Field label="Customer"><input value={editForm.customer_name} onChange={e=>setEditForm({...editForm,customer_name:e.target.value})}/></Field><Field label="Phone"><input value={editForm.phone} onChange={e=>setEditForm({...editForm,phone:e.target.value})}/></Field><div className="form-row"><Field label="Date"><input type="date" value={editForm.date} onChange={e=>setEditForm({...editForm,date:e.target.value})}/></Field><Field label="Start"><input type="time" value={editForm.start_time} onChange={e=>setEditForm({...editForm,start_time:e.target.value})}/></Field></div><Field label="Style"><select value={editForm.style_id} onChange={e=>setEditForm({...editForm,style_id:e.target.value})}>{styles.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field><Field label="Agreed price"><input type="number" min="1" value={editForm.agreed_price} onChange={e=>setEditForm({...editForm,agreed_price:e.target.value})}/></Field><button className="primary wide">Save changes</button></form>}<div className="payment-box card"><div className="payment-summary"><span>Paid</span><strong>{money(selected.deposit_amount)}</strong><span>Balance</span><strong>{money(selected.balance)}</strong></div>{selected.balance>0&&<form className="payment-form" onSubmit={savePayment}><input required type="number" min="1" max={selected.balance} placeholder={`Payment up to ${money(selected.balance)}`} value={pay.amount} onChange={e=>setPay({...pay,amount:e.target.value})}/><select value={pay.payment_type} onChange={e=>setPay({...pay,payment_type:e.target.value})}><option>DEPOSIT</option><option>BALANCE</option></select><input placeholder="Orange Money reference (optional)" value={pay.reference} onChange={e=>setPay({...pay,reference:e.target.value})}/><button className="primary"><CreditCard/> Record payment</button></form>}</div><div className="modal-actions">{selected.status==='CONFIRMED'&&<><button className="soft danger-text" onClick={()=>action(()=>api.noShow(selected.id))}><UserX/> No-show</button><button className="soft" onClick={()=>action(()=>api.cancel(selected.id))}><Ban/> Cancel</button></>}{selected.status==='IN_PROGRESS'&&<button className="done wide" onClick={()=>action(()=>api.complete(selected.id))}><CheckCircle2/> Mark completed</button>}</div></div></div>}
+  {customer&&<div className="modal-backdrop" onClick={()=>setCustomer(null)}><div className="modal customer-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">CUSTOMER RECORD</p><h2>{customer.customer.name}</h2><p className="muted">{customer.customer.phone}</p></div><button className="ghost" onClick={()=>setCustomer(null)}>Close</button></div><div className="customer-profile"><div className="avatar large">{customer.customer.name.slice(0,1).toUpperCase()}</div><div><strong>{customer.customer.appointments} appointments</strong><span>{customer.customer.last_visit?`Last visit ${prettyDate(customer.customer.last_visit.slice(0,10))}`:'No completed visit yet'}</span></div></div><div className="card notes"><strong>Preferred styles</strong><p>{customer.customer.preferred_styles||'Not recorded yet.'}</p><strong>Notes</strong><p>{customer.customer.notes||'No notes yet.'}</p></div><h3>Appointment history</h3>{customer.history.map((a:Appointment)=><AppointmentRow key={a.id} a={a} onClick={()=>{setCustomer(null);openEdit(a)}} compact/>)}</div></div>}
+  <nav className="bottom-nav">{nav('today','Today',<LayoutDashboard/>)}{nav('manage','Bookings',<CalendarDays/>)}{nav('customers','Customers',<UsersRound/>)}{nav('availability','Availability',<Lock/>)}{nav('book','Book',<Plus/>)}</nav>
+ </div>
 }
+function Stat({icon,label,value}:{icon:any;label:string;value:any}){return <div className="stat-card">{icon}<div><span>{label}</span><strong>{value}</strong></div></div>}
+function Field({label,children}:{label:string;children:any}){return <label className="field">{label}{children}</label>}
+function Page({title,eyebrow,back,children}:{title:string;eyebrow:string;back?:()=>void;children:any}){return <><div className="section-head page-head"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2></div>{back&&<button className="ghost" onClick={back}>Back</button>}</div>{children}</>}
+function AppointmentRow({a,onClick,compact=false}:{a:Appointment;onClick:()=>void;compact?:boolean}){return <button className={`appointment ${a.status.toLowerCase()} ${compact?'compact':''}`} onClick={onClick}><div className="time">{a.start_time}<small>{a.expected_end_time}</small></div><div className="appt-main"><strong>{a.customer_name}</strong><span>{a.style_name} · {prettyDate(a.date)}</span><small>{money(a.agreed_price)} · {a.payment_status.replaceAll('_',' ')}</small></div><div className="appt-state">{a.status==='COMPLETED'?<CheckCircle2/>:a.status==='CANCELLED'?<XCircle/>:<Clock3/>}</div></button>}
