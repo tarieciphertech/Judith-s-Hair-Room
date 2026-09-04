@@ -1,12 +1,21 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
+export class ApiError extends Error {
+  status: number
+  detail: any
+  constructor(status: number, detail: any, fallback: string) {
+    const message = typeof detail === 'string' ? detail : detail?.message || fallback
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {headers:{'Content-Type':'application/json', ...(options?.headers || {})}, ...options})
   const body = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const detail = typeof body.detail === 'string' ? body.detail : body.detail?.message
-    throw new Error(detail || `Request failed (${response.status})`)
-  }
+  if (!response.ok) throw new ApiError(response.status, body.detail, `Request failed (${response.status})`)
   return body
 }
 
