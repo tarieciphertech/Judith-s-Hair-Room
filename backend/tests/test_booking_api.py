@@ -51,7 +51,7 @@ def test_valid_booking_creates_confirmed_appointment_and_deposit():
         assert body['status'] == 'CONFIRMED'
         assert body['payment_status'] == 'DEPOSIT_PAID'
         assert Decimal(str(body['deposit_amount'])) == Decimal('150.00')
-        assert body['balance'] == 150
+        assert Decimal(str(body['balance'])) == Decimal('150.00')
     finally: cleanup([phone])
 
 
