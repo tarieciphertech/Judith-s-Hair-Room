@@ -14,7 +14,7 @@ def upgrade():
     CREATE TABLE salon_settings (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), salon_name varchar(160) NOT NULL,
       phone varchar(40) NOT NULL DEFAULT '', whatsapp varchar(40) NOT NULL DEFAULT '', address varchar(255) NOT NULL DEFAULT '',
-      opening_time time NOT NULL DEFAULT '08:00', closing_time time NOT NULL DEFAULT '18:00', working_days varchar(32) NOT NULL DEFAULT '0,1,2,3,4,5',
+      opening_time time NOT NULL DEFAULT '08:00', closing_time time NOT NULL DEFAULT '18:00', working_days varchar(32) NOT NULL DEFAULT '0,1,2,3,4,5,6',
       booking_min_notice_minutes integer NOT NULL DEFAULT 60, max_advance_days integer NOT NULL DEFAULT 60,
       deposit_percentage numeric(5,2) NOT NULL DEFAULT 50, currency varchar(8) NOT NULL DEFAULT 'BWP',
       created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
@@ -36,15 +36,16 @@ def upgrade():
       expected_end_time time NOT NULL, actual_end_time time, agreed_price numeric(10,2) NOT NULL, deposit_amount numeric(10,2) NOT NULL DEFAULT 0,
       balance numeric(10,2) NOT NULL, status varchar(20) NOT NULL DEFAULT 'CONFIRMED', payment_status varchar(20) NOT NULL DEFAULT 'UNPAID',
       started_at timestamptz, completed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
-      CHECK (agreed_price > 0), CHECK (deposit_amount >= 0), CHECK (balance >= 0),
+      CHECK (start_time < expected_end_time), CHECK (agreed_price > 0), CHECK (deposit_amount >= 0), CHECK (balance >= 0),
       CHECK (status IN ('PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED','NO_SHOW')),
       CHECK (payment_status IN ('UNPAID','DEPOSIT_PAID','FULLY_PAID','REFUNDED')),
       EXCLUDE USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)') WITH &&)
+        WHERE (status IN ('PENDING','CONFIRMED','IN_PROGRESS'))
     );
     CREATE TABLE payments (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), appointment_id uuid NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
       amount numeric(10,2) NOT NULL, method varchar(40) NOT NULL DEFAULT 'Orange Money', payment_type varchar(20) NOT NULL DEFAULT 'DEPOSIT',
-      reference varchar(120), status varchar(20) NOT NULL DEFAULT 'RECORDED', paid_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now()
+      reference varchar(120), status varchar(20) NOT NULL DEFAULT 'RECORDED', paid_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now(), CHECK (amount > 0)
     );
     CREATE TABLE blocked_times (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), blocked_date date NOT NULL, start_time time NOT NULL, end_time time NOT NULL,
@@ -60,7 +61,7 @@ def upgrade():
     CREATE TABLE expenses (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), description varchar(255) NOT NULL, amount numeric(10,2) NOT NULL,
       category varchar(80) NOT NULL DEFAULT 'Other', expense_date date NOT NULL, notes text NOT NULL DEFAULT '',
-      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), CHECK (amount > 0)
     );
     CREATE TABLE notifications (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
@@ -81,7 +82,8 @@ def upgrade():
         ('Carrot',180,250,210,'Customer buys required braid/hair'), ('Singles',250,500,240,'Customer buys required braid/hair'),
         ('Udo',50,50,60,"Customer's hair"), ('Brazilian',100,100,120,'Customer buys required braid/hair'),
         ('French',15,25,45,'Customer buys required braid/hair')]:
-        op.execute(f"INSERT INTO styles (name,min_price,max_price,estimated_duration_minutes,required_hair) VALUES ('{name}',{lo},{hi},{duration},'{hair}')")
+        safe_name = name.replace("'", "''"); safe_hair = hair.replace("'", "''")
+        op.execute(f"INSERT INTO styles (name,min_price,max_price,estimated_duration_minutes,required_hair) VALUES ('{safe_name}',{lo},{hi},{duration},'{safe_hair}')")
 
 
 def downgrade():
