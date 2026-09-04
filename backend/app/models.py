@@ -43,6 +43,16 @@ class Appointment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__=(CheckConstraint('agreed_price > 0'),Index('ix_appointments_slot','appointment_date','start_time','expected_end_time'))
 
+class Payment(Base):
+    __tablename__='payments'
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda:str(uuid4()))
+    appointment_id: Mapped[str] = mapped_column(UUID(as_uuid=False), index=True)
+    amount: Mapped[float] = mapped_column(Float)
+    method: Mapped[str] = mapped_column(String(40), default='Orange Money')
+    payment_type: Mapped[str] = mapped_column(String(20), default='DEPOSIT')
+    reference: Mapped[str|None] = mapped_column(String(120), nullable=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 class BlockedTime(Base):
     __tablename__='blocked_times'
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda:str(uuid4()))
