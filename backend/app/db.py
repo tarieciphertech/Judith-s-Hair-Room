@@ -1,15 +1,23 @@
-import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from .config import settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./judiths_hair_room.db")
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+if not settings.database_url.startswith(('postgresql://', 'postgresql+psycopg://')):
+    raise RuntimeError('DATABASE_URL must point to PostgreSQL. SQLite is not supported for production.')
 
-class Base(DeclarativeBase): pass
+engine = create_engine(settings.database_url, pool_pre_ping=True, pool_recycle=300)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
 
 def get_db():
-    db=SessionLocal()
-    try: yield db
-    finally: db.close()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def lock_calendar_day(db: Session, day) -> None:
+    # Serialize booking/blocking operations for the same calendar day.
+    db.execute(__import__('sqlalchemy').text('SELECT pg_advisory_xact_lock(hashtext(:day))'), {'day': day.isoformat()})
