@@ -1,124 +1,88 @@
 from datetime import date, datetime, time, timedelta
-from enum import Enum
-from uuid import UUID, uuid4
-
-from fastapi import FastAPI, HTTPException, Query
+from uuid import UUID
+import os
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from .db import Base, engine, get_db
+from .models import Appointment, BlockedTime, Customer, Style
 
-app = FastAPI(title="Judith's Hair Room API", version="0.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app=FastAPI(title="Judith's Hair Room API",version="0.2.0")
+app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS','*').split(',')],allow_methods=['*'],allow_headers=['*'])
 
-class Status(str, Enum):
-    PENDING="PENDING"; CONFIRMED="CONFIRMED"; IN_PROGRESS="IN_PROGRESS"; COMPLETED="COMPLETED"; CANCELLED="CANCELLED"; NO_SHOW="NO_SHOW"
-
-class Style(BaseModel):
-    id: UUID
-    name: str
-    min_price: int
-    max_price: int
-    estimated_duration_minutes: int
-    required_hair: str
-
-STYLES = [
-    Style(id=uuid4(), name="Wash", min_price=60, max_price=70, estimated_duration_minutes=60, required_hair="Customer's hair"),
-    Style(id=uuid4(), name="Condro", min_price=140, max_price=200, estimated_duration_minutes=180, required_hair="Customer buys required braid/hair"),
-    Style(id=uuid4(), name="Carrot", min_price=180, max_price=250, estimated_duration_minutes=210, required_hair="Customer buys required braid/hair"),
-    Style(id=uuid4(), name="Singles", min_price=250, max_price=500, estimated_duration_minutes=240, required_hair="Customer buys required braid/hair"),
-    Style(id=uuid4(), name="Udo", min_price=50, max_price=50, estimated_duration_minutes=60, required_hair="Customer's hair"),
-    Style(id=uuid4(), name="Brazilian", min_price=100, max_price=100, estimated_duration_minutes=120, required_hair="Customer buys required braid/hair"),
-    Style(id=uuid4(), name="French", min_price=15, max_price=25, estimated_duration_minutes=45, required_hair="Customer buys required braid/hair"),
-]
-
-class Appointment(BaseModel):
-    id: UUID
-    customer_name: str
-    phone: str
-    style_id: UUID
-    style_name: str
-    date: date
-    start_time: time
-    expected_end_time: time
-    agreed_price: float
-    deposit_amount: float
-    balance: float
-    status: Status = Status.CONFIRMED
-    payment_status: str = "DEPOSIT_PAID"
-
-APPOINTMENTS: list[Appointment] = []
-BLOCKED: list[tuple[date,time,time]] = []
-
+class StyleOut(BaseModel):
+ id:str; name:str; min_price:float; max_price:float; estimated_duration_minutes:int; required_hair:str
+ model_config={'from_attributes':True}
 class Booking(BaseModel):
-    customer_name: str = Field(min_length=2)
-    phone: str = Field(min_length=5)
-    style_id: UUID
-    date: date
-    start_time: time
-    expected_end_time: time
-    agreed_price: float = Field(gt=0)
-    deposit_amount: float = Field(gt=0)
+ customer_name:str=Field(min_length=2); phone:str=Field(min_length=5); style_id:UUID; date:date; start_time:time; expected_end_time:time; agreed_price:float=Field(gt=0); deposit_amount:float=Field(gt=0)
+class AppointmentOut(BaseModel):
+ id:str; customer_name:str; phone:str; style_id:str; style_name:str; date:date; start_time:time; expected_end_time:time; agreed_price:float; deposit_amount:float; balance:float; status:str; payment_status:str
 
-@app.get("/health")
-def health(): return {"status":"ok","service":"judiths-hair-room"}
+SEEDS=[('Wash',60,70,60,"Customer's hair"),('Condro',140,200,180,'Customer buys required braid/hair'),('Carrot',180,250,210,'Customer buys required braid/hair'),('Singles',250,500,240,'Customer buys required braid/hair'),('Udo',50,50,60,"Customer's hair"),('Brazilian',100,100,120,'Customer buys required braid/hair'),('French',15,25,45,'Customer buys required braid/hair')]
+@app.on_event('startup')
+def startup():
+ Base.metadata.create_all(bind=engine)
+ with Session(engine) as db:
+  if not db.scalar(select(Style).limit(1)):
+   db.add_all([Style(name=n,min_price=lo,max_price=hi,estimated_duration_minutes=d,required_hair=h) for n,lo,hi,d,h in SEEDS]); db.commit()
 
-@app.get("/api/styles", response_model=list[Style])
-def styles(): return STYLES
+def dto(db,a):
+ c=db.get(Customer,a.customer_id); s=db.get(Style,a.style_id)
+ return AppointmentOut(id=a.id,customer_name=c.name,phone=c.phone,style_id=a.style_id,style_name=s.name,date=a.appointment_date,start_time=a.start_time,expected_end_time=a.expected_end_time,agreed_price=a.agreed_price,deposit_amount=a.deposit_amount,balance=a.balance,status=a.status,payment_status=a.payment_status)
 
-@app.get("/api/appointments", response_model=list[Appointment])
-def appointments(): return APPOINTMENTS
+def conflicts(db,day,start,end):
+ ap=db.scalar(select(Appointment.id).where(Appointment.appointment_date==day,Appointment.status.not_in(['CANCELLED','NO_SHOW']),Appointment.start_time<end,Appointment.expected_end_time>start).limit(1))
+ if ap:return 'appointment_conflict'
+ block=db.scalar(select(BlockedTime.id).where(BlockedTime.blocked_date==day,BlockedTime.start_time<end,BlockedTime.end_time>start).limit(1))
+ return 'blocked_time' if block else None
 
-@app.get("/api/availability")
-def availability(date: date, start_time: time, end_time: time):
-    if end_time <= start_time: raise HTTPException(400, "End time must be after start time")
-    for a in APPOINTMENTS:
-        if a.date == date and a.status != Status.CANCELLED and start_time < a.expected_end_time and end_time > a.start_time:
-            return {"available":False,"reason":"appointment_conflict","suggestions":suggestions(date,start_time,end_time)}
-    for d,s,e in BLOCKED:
-        if d == date and start_time < e and end_time > s:
-            return {"available":False,"reason":"blocked_time","suggestions":suggestions(date,start_time,end_time)}
-    return {"available":True,"suggestions":[]}
+def suggestions(db,day,start,end):
+ duration=datetime.combine(day,end)-datetime.combine(day,start); cursor=datetime.combine(day,time(8)); close=datetime.combine(day,time(18)); out=[]
+ while cursor+duration<=close and len(out)<3:
+  s=cursor.time(); e=(cursor+duration).time()
+  if not conflicts(db,day,s,e): out.append({'start_time':s.strftime('%H:%M'),'end_time':e.strftime('%H:%M')})
+  cursor+=timedelta(minutes=30)
+ return out
 
-def suggestions(day:date, requested_start:time, requested_end:time):
-    duration = datetime.combine(day, requested_end) - datetime.combine(day, requested_start)
-    out=[]; cursor=datetime.combine(day, max(requested_start,time(8,0)))
-    close=datetime.combine(day,time(18,0))
-    while cursor + duration <= close and len(out)<3:
-        s=cursor.time(); e=(cursor+duration).time()
-        if availability(day,s,e)["available"]: out.append({"start_time":s.isoformat(timespec="minutes"),"end_time":e.isoformat(timespec="minutes")})
-        cursor += timedelta(minutes=30)
-    return out
-
-@app.post("/api/appointments", response_model=Appointment, status_code=201)
-def create_booking(data: Booking):
-    if data.expected_end_time <= data.start_time: raise HTTPException(400,"End time must be after start time")
-    conflict=availability(data.date,data.start_time,data.expected_end_time)
-    if not conflict["available"]: raise HTTPException(409, detail={"message":"That slot is no longer available.","reason":conflict["reason"],"suggestions":conflict["suggestions"]})
-    style=next((s for s in STYLES if s.id==data.style_id),None)
-    if not style: raise HTTPException(404,"Style not found")
-    if data.deposit_amount < data.agreed_price*0.5: raise HTTPException(400,"Deposit must be at least 50% of agreed price")
-    a=Appointment(id=uuid4(),customer_name=data.customer_name,phone=data.phone,style_id=data.style_id,style_name=style.name,date=data.date,start_time=data.start_time,expected_end_time=data.expected_end_time,agreed_price=data.agreed_price,deposit_amount=data.deposit_amount,balance=data.agreed_price-data.deposit_amount)
-    APPOINTMENTS.append(a); return a
-
-@app.post("/api/appointments/{appointment_id}/start", response_model=Appointment)
-def start(appointment_id:UUID):
-    a=next((x for x in APPOINTMENTS if x.id==appointment_id),None)
-    if not a: raise HTTPException(404,"Appointment not found")
-    if a.status not in (Status.CONFIRMED,Status.PENDING): raise HTTPException(409,"Appointment cannot be started")
-    a.status=Status.IN_PROGRESS; return a
-
-@app.post("/api/appointments/{appointment_id}/complete", response_model=Appointment)
-def complete(appointment_id:UUID):
-    a=next((x for x in APPOINTMENTS if x.id==appointment_id),None)
-    if not a: raise HTTPException(404,"Appointment not found")
-    a.status=Status.COMPLETED; a.expected_end_time=datetime.now().time().replace(second=0,microsecond=0); return a
-
-@app.post("/api/appointments/{appointment_id}/cancel", response_model=Appointment)
-def cancel(appointment_id:UUID):
-    a=next((x for x in APPOINTMENTS if x.id==appointment_id),None)
-    if not a: raise HTTPException(404,"Appointment not found")
-    a.status=Status.CANCELLED; return a
-
-@app.get("/api/dashboard")
-def dashboard():
-    today=date.today(); todays=[a for a in APPOINTMENTS if a.date==today and a.status!=Status.CANCELLED]
-    return {"today":today,"occupied":any(a.status==Status.IN_PROGRESS for a in todays),"appointments":len(todays),"completed":sum(a.status==Status.COMPLETED for a in todays),"unpaid_deposits":sum(a.payment_status=="UNPAID" for a in todays),"revenue":sum(a.deposit_amount for a in todays if a.status==Status.COMPLETED)}
+@app.get('/health')
+def health():return {'status':'ok','service':'judiths-hair-room'}
+@app.get('/api/styles',response_model=list[StyleOut])
+def styles(db:Session=Depends(get_db)):return db.scalars(select(Style).where(Style.active==True).order_by(Style.name)).all()
+@app.get('/api/appointments',response_model=list[AppointmentOut])
+def appointments(db:Session=Depends(get_db)):return [dto(db,a) for a in db.scalars(select(Appointment).order_by(Appointment.appointment_date,Appointment.start_time)).all()]
+@app.get('/api/availability')
+def availability(date:date,start_time:time,end_time:time,db:Session=Depends(get_db)):
+ if end_time<=start_time:raise HTTPException(400,'End time must be after start time')
+ reason=conflicts(db,date,start_time,end_time)
+ return {'available':not reason,'reason':reason,'suggestions':suggestions(db,date,start_time,end_time) if reason else []}
+@app.post('/api/appointments',response_model=AppointmentOut,status_code=201)
+def create(data:Booking,db:Session=Depends(get_db)):
+ if data.expected_end_time<=data.start_time:raise HTTPException(400,'End time must be after start time')
+ style=db.get(Style,str(data.style_id))
+ if not style:raise HTTPException(404,'Style not found')
+ if data.deposit_amount<data.agreed_price*.5:raise HTTPException(400,'Deposit must be at least 50% of agreed price')
+ if conflicts(db,data.date,data.start_time,data.expected_end_time):raise HTTPException(409,detail={'message':'That slot is no longer available.','suggestions':suggestions(db,data.date,data.start_time,data.expected_end_time)})
+ c=db.scalar(select(Customer).where(Customer.phone==data.phone))
+ if not c:c=Customer(name=data.customer_name,phone=data.phone);db.add(c);db.flush()
+ else:c.name=data.customer_name
+ a=Appointment(customer_id=c.id,style_id=style.id,appointment_date=data.date,start_time=data.start_time,expected_end_time=data.expected_end_time,agreed_price=data.agreed_price,deposit_amount=data.deposit_amount,balance=data.agreed_price-data.deposit_amount,status='CONFIRMED',payment_status='DEPOSIT_PAID')
+ db.add(a);db.commit();db.refresh(a);return dto(db,a)
+def mutate(id:UUID,new_status:str,db:Session):
+ a=db.get(Appointment,str(id));
+ if not a:raise HTTPException(404,'Appointment not found')
+ if new_status=='IN_PROGRESS' and a.status not in ('CONFIRMED','PENDING'):raise HTTPException(409,'Appointment cannot be started')
+ a.status=new_status
+ if new_status=='COMPLETED':a.actual_end_time=datetime.now().time().replace(second=0,microsecond=0);a.expected_end_time=a.actual_end_time
+ db.commit();db.refresh(a);return dto(db,a)
+@app.post('/api/appointments/{id}/start',response_model=AppointmentOut)
+def start(id:UUID,db:Session=Depends(get_db)):return mutate(id,'IN_PROGRESS',db)
+@app.post('/api/appointments/{id}/complete',response_model=AppointmentOut)
+def complete(id:UUID,db:Session=Depends(get_db)):return mutate(id,'COMPLETED',db)
+@app.post('/api/appointments/{id}/cancel',response_model=AppointmentOut)
+def cancel(id:UUID,db:Session=Depends(get_db)):return mutate(id,'CANCELLED',db)
+@app.get('/api/dashboard')
+def dashboard(db:Session=Depends(get_db)):
+ d=date.today(); rows=db.scalars(select(Appointment).where(Appointment.appointment_date==d)).all()
+ return {'today':d,'occupied':any(a.status=='IN_PROGRESS' for a in rows),'appointments':len([a for a in rows if a.status!='CANCELLED']),'completed':sum(a.status=='COMPLETED' for a in rows),'unpaid_deposits':sum(a.payment_status=='UNPAID' for a in rows),'revenue':sum(a.deposit_amount for a in rows if a.status=='COMPLETED')}
