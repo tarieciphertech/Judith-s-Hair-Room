@@ -1,9 +1,20 @@
 from functools import lru_cache
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    # CORS_ORIGINS is intentionally supplied as a comma-separated environment
+    # variable (rather than JSON) so CI, Render, and local .env files can use
+    # the same simple format. Disable pydantic-settings' JSON decoding so the
+    # validator below receives the raw string first.
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        extra='ignore',
+        enable_decoding=False,
+    )
 
     database_url: str
     secret_key: str
@@ -18,8 +29,10 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(',') if item.strip()]
         return value
 
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
 
 settings = get_settings()
