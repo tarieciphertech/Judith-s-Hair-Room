@@ -39,7 +39,7 @@ def upgrade():
       CHECK (agreed_price > 0), CHECK (deposit_amount >= 0), CHECK (balance >= 0),
       CHECK (status IN ('PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED','NO_SHOW')),
       CHECK (payment_status IN ('UNPAID','DEPOSIT_PAID','FULLY_PAID','REFUNDED')),
-      EXCLUDE USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)') WITH =&&)
+      EXCLUDE USING gist (tsrange(appointment_date + start_time, appointment_date + expected_end_time, '[)') WITH &&)
     );
     CREATE TABLE payments (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), appointment_id uuid NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
@@ -76,9 +76,12 @@ def upgrade():
     op.execute("CREATE INDEX ix_blocked_times_date ON blocked_times(blocked_date, start_time)")
     op.execute("CREATE INDEX ix_notifications_status ON notifications(status)")
     op.execute("INSERT INTO salon_settings (salon_name) VALUES ('Judith''s Hair Room')")
-    styles = [('Wash',60,70,60,"Customer's hair"),('Condro',140,200,180,'Customer buys required braid/hair'),('Carrot',180,250,210,'Customer buys required braid/hair'),('Singles',250,500,240,'Customer buys required braid/hair'),('Udo',50,50,60,"Customer's hair"),('Brazilian',100,100,120,'Customer buys required braid/hair'),('French',15,25,45,'Customer buys required braid/hair')]
-    for name, lo, hi, duration, hair in styles:
-        op.execute("INSERT INTO styles (name,min_price,max_price,estimated_duration_minutes,required_hair) VALUES (%s,%s,%s,%s,%s)", (name,lo,hi,duration,hair))
+    for name, lo, hi, duration, hair in [
+        ('Wash',60,70,60,"Customer's hair"), ('Condro',140,200,180,'Customer buys required braid/hair'),
+        ('Carrot',180,250,210,'Customer buys required braid/hair'), ('Singles',250,500,240,'Customer buys required braid/hair'),
+        ('Udo',50,50,60,"Customer's hair"), ('Brazilian',100,100,120,'Customer buys required braid/hair'),
+        ('French',15,25,45,'Customer buys required braid/hair')]:
+        op.execute(f"INSERT INTO styles (name,min_price,max_price,estimated_duration_minutes,required_hair) VALUES ('{name}',{lo},{hi},{duration},'{hair}')")
 
 
 def downgrade():
