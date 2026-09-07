@@ -73,6 +73,15 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+      - name: Create direct-route entry points
+        working-directory: frontend
+        run: |
+          for route in admin booking; do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
+          mkdir -p dist/booking/confirmation
+          cp dist/index.html dist/booking/confirmation/index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
