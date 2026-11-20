@@ -1,4 +1,6 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const TOKEN_KEY = 'judith_owner_token'
+const getToken = () => window.localStorage.getItem(TOKEN_KEY)
 
 export class ApiError extends Error {
   status: number
@@ -13,13 +15,26 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {headers:{'Content-Type':'application/json', ...(options?.headers || {})}, ...options})
+  const token = getToken()
+  const response = await fetch(`${API_URL}${path}`, { ...options, headers:{'Content-Type':'application/json', ...(token && path !== '/api/auth/login' ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {})} })
   const body = await response.json().catch(() => ({}))
-  if (!response.ok) throw new ApiError(response.status, body.detail, `Request failed (${response.status})`)
+  if (!response.ok) {
+    if (response.status === 401 && path !== '/api/auth/login') {
+      window.localStorage.removeItem(TOKEN_KEY)
+      window.dispatchEvent(new Event('judith-auth-expired'))
+    }
+    throw new ApiError(response.status, body.detail, `Request failed (${response.status})`)
+  }
   return body
 }
 
 export const api = {
+  login: async (username:string,password:string) => {
+    const result = await request<{access_token:string}>('/api/auth/login',{method:'POST',body:JSON.stringify({username,password})})
+    window.localStorage.setItem(TOKEN_KEY,result.access_token)
+    return result
+  },
+  logout: () => window.localStorage.removeItem(TOKEN_KEY),
   styles: () => request<any[]>('/api/styles'),
   availability: (date:string,start:string,end:string) => request<any>(`/api/availability?date=${encodeURIComponent(date)}&start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(end)}`),
   dashboard: () => request<any>('/api/dashboard'),
