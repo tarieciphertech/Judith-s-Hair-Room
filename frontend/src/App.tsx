@@ -43,7 +43,7 @@ export default function App() {
       setAppointments(a); setStyles(s); setCustomers(c); setBlocks(b); setError('')
     } catch (e: any) { setError(e?.message || 'Could not load the digital secretary data.') }
   }
-  useEffect(() => { void load(); const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer) }, [query, authenticated])
+  useEffect(() => { if (!authenticated) return; void load(); const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer) }, [query, authenticated])
   useEffect(() => { const expired = () => { setAuthenticated(false); setLoginError('Your session expired. Please sign in again.') }; window.addEventListener('judith-auth-expired', expired); return () => window.removeEventListener('judith-auth-expired', expired) }, [])
 
   const day = today()
