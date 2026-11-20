@@ -8,3 +8,60 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 
 .login-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,#f8e5e1,transparent 30rem),var(--cream)}.login-card{width:min(430px,100%);display:grid;gap:16px;padding:34px;background:var(--paper);border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow)}.login-card h1{font-size:34px}.login-card .muted{font-size:13px;line-height:1.6;color:var(--muted);margin:0 0 5px}.login-mark{width:52px;height:52px;border-radius:17px;background:var(--ink);color:white;display:grid;place-items:center}.login-mark svg{width:23px}.topbar-actions{display:flex;align-items:center;gap:9px}.signout{font-size:11px}.signout svg{width:14px}@media(max-width:560px){.topbar-actions{flex-direction:column;align-items:flex-end}.signout{padding:8px 10px}}
+
+
+/* Lively salon atmosphere — soft motion, never distracting */
+html{scroll-behavior:smooth}
+body{background-attachment:fixed;position:relative;isolation:isolate}
+body::before,body::after{content:"";position:fixed;z-index:-1;pointer-events:none;border-radius:50%;filter:blur(2px);opacity:.42}
+body::before{width:340px;height:340px;top:12%;left:-190px;background:radial-gradient(circle,rgba(215,160,151,.34),transparent 68%);animation:ambient-drift 18s ease-in-out infinite alternate}
+body::after{width:420px;height:420px;right:-230px;bottom:8%;background:radial-gradient(circle,rgba(191,151,125,.22),transparent 68%);animation:ambient-drift 23s ease-in-out infinite alternate-reverse}
+@keyframes ambient-drift{from{transform:translate3d(0,-16px,0) scale(.92)}to{transform:translate3d(42px,30px,0) scale(1.12)}}
+@keyframes rise-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes soft-pulse{0%,100%{box-shadow:0 0 0 0 rgba(53,109,82,.18)}50%{box-shadow:0 0 0 7px rgba(53,109,82,0)}}
+@keyframes rose-pulse{0%,100%{box-shadow:0 0 0 0 rgba(185,120,120,.2)}50%{box-shadow:0 0 0 7px rgba(185,120,120,0)}}
+@keyframes hero-shimmer{0%{transform:translateX(-130%) skewX(-18deg);opacity:0}18%{opacity:.45}55%,100%{transform:translateX(230%) skewX(-18deg);opacity:0}}
+@keyframes icon-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.topbar{animation:rise-in .55s cubic-bezier(.2,.7,.2,1) both}
+.hero-card{animation:rise-in .65s .05s cubic-bezier(.2,.7,.2,1) both}
+.hero-card::before{content:"";position:absolute;inset:-30% auto -30% -35%;width:28%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);transform:skewX(-18deg);animation:hero-shimmer 8s ease-in-out infinite;pointer-events:none}
+.hero-card::after{animation:hero-orbit 24s linear infinite}
+@keyframes hero-orbit{to{transform:rotate(360deg)}}
+.stats-grid{animation:rise-in .65s .14s both}
+.stat.card{transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .28s,border-color .28s;animation:rise-in .6s both}
+.stat.card:nth-child(1){animation-delay:.12s}.stat.card:nth-child(2){animation-delay:.18s}.stat.card:nth-child(3){animation-delay:.24s}.stat.card:nth-child(4){animation-delay:.30s}
+.stat.card:hover{transform:translateY(-5px);box-shadow:0 16px 34px rgba(57,39,32,.09);border-color:#d9c2b8}
+.stat-icon{transition:transform .3s,background .3s}
+.stat.card:hover .stat-icon{transform:rotate(-7deg) scale(1.06);background:#ead6cf}
+.section-head,.timeline,.upcoming-block,.page{animation:rise-in .55s .12s both}
+.timeline .appointment-row,.manage-list .appointment-row{animation:rise-in .42s both}
+.timeline .appointment-row:nth-child(2),.manage-list .appointment-row:nth-child(2){animation-delay:.05s}
+.timeline .appointment-row:nth-child(3),.manage-list .appointment-row:nth-child(3){animation-delay:.1s}
+.timeline .appointment-row:nth-child(4),.manage-list .appointment-row:nth-child(4){animation-delay:.15s}
+.timeline .appointment-row:nth-child(5),.manage-list .appointment-row:nth-child(5){animation-delay:.2s}
+.status span{animation:soft-pulse 2.2s ease-out infinite}
+.status.occupied span{animation:rose-pulse 1.7s ease-out infinite}
+.brand-mark{transition:transform .3s,box-shadow .3s}
+.brand:hover .brand-mark{transform:rotate(-8deg) scale(1.04);box-shadow:0 13px 28px rgba(43,36,34,.22)}
+.primary,.done,.ghost,.icon-btn,.soft,.action-chip,.bottom-nav button{transition:transform .2s ease,box-shadow .2s ease,background .2s ease,color .2s ease}
+button:active,.action-chip:active{transform:scale(.97)}
+.primary:hover,.done:hover{transform:translateY(-2px)}
+.icon-btn:hover{transform:rotate(5deg) scale(1.04)}
+.customer-row{transition:transform .22s,box-shadow .22s,border-color .22s}
+.customer-row:hover{transform:translateX(3px);border-color:#d4bdb3;box-shadow:0 9px 22px rgba(57,39,32,.06)}
+.avatar{transition:transform .25s,background .25s}
+.customer-row:hover .avatar{transform:scale(1.08);background:#e5cfc7}
+.bottom-nav button.active svg{animation:icon-float 2.4s ease-in-out infinite}
+.modal-backdrop{animation:backdrop-in .2s ease both}
+.modal{animation:modal-in .28s cubic-bezier(.2,.8,.2,1) both}
+@keyframes backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes modal-in{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+.login-card{animation:modal-in .55s cubic-bezier(.2,.8,.2,1) both}
+.login-mark{animation:icon-float 4s ease-in-out infinite}
+.field input,.field select,.search input,.payment-form input,.payment-form select{transition:border-color .2s,box-shadow .2s,background .2s}
+.field input:hover,.field select:hover{border-color:#c9aaa0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  body::before,body::after,.hero-card::before,.hero-card::after,.status span,.bottom-nav button.active svg,.login-mark{animation:none!important}
+  .topbar,.hero-card,.stats-grid,.stat.card,.section-head,.timeline,.upcoming-block,.page,.timeline .appointment-row,.manage-list .appointment-row,.modal-backdrop,.modal,.login-card{animation:none!important}
+}
