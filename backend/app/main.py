@@ -1,8 +1,11 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
+import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+import jwt
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
@@ -22,6 +25,44 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+PUBLIC_API_ROUTES = {
+    ("POST", "/api/auth/login"),
+    ("GET", "/api/styles"),
+    ("GET", "/api/availability"),
+    ("POST", "/api/appointments"),
+}
+
+@app.middleware("http")
+async def owner_api_guard(request: Request, call_next):
+    path = request.url.path
+    if not path.startswith("/api/") or request.method == "OPTIONS" or (request.method, path) in PUBLIC_API_ROUTES:
+        return await call_next(request)
+    authorization = request.headers.get("Authorization", "")
+    token = authorization[7:] if authorization.startswith("Bearer ") else ""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        if payload.get("sub") != settings.owner_username or not settings.owner_username or not settings.owner_password:
+            raise jwt.InvalidTokenError("Owner identity is not configured")
+    except jwt.PyJWTError:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=401, content={"detail": "Owner sign-in required"})
+    return await call_next(request)
+
+class OwnerLoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=256)
+
+
+@app.post("/api/auth/login")
+def owner_login(data: OwnerLoginIn):
+    if not settings.owner_username or not settings.owner_password:
+        raise HTTPException(503, "Owner login is not configured on the server")
+    if not secrets.compare_digest(data.username, settings.owner_username) or not secrets.compare_digest(data.password, settings.owner_password):
+        raise HTTPException(401, "Incorrect username or password")
+    expires = datetime.now(timezone.utc) + timedelta(hours=12)
+    token = jwt.encode({"sub": settings.owner_username, "exp": expires}, settings.secret_key, algorithm="HS256")
+    return {"access_token": token, "token_type": "bearer", "expires_in": 43200}
 
 class StyleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
