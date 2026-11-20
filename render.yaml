@@ -13,3 +13,7 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         sync: false
+      - key: OWNER_USERNAME
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
