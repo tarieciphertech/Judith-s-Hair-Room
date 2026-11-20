@@ -65,3 +65,39 @@ button:active,.action-chip:active{transform:scale(.97)}
   body::before,body::after,.hero-card::before,.hero-card::after,.status span,.bottom-nav button.active svg,.login-mark{animation:none!important}
   .topbar,.hero-card,.stats-grid,.stat.card,.section-head,.timeline,.upcoming-block,.page,.timeline .appointment-row,.manage-list .appointment-row,.modal-backdrop,.modal,.login-card{animation:none!important}
 }
+
+
+/* Photography-led lookbook and continuous salon image scroll */
+.hero-card{background-image:linear-gradient(100deg,rgba(35,25,23,.94) 0%,rgba(48,34,31,.82) 52%,rgba(48,34,31,.38) 100%),url('https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1800&auto=format&fit=crop&q=90');background-size:cover;background-position:center 42%}
+.inspiration-section{margin:0 0 32px;overflow:hidden}
+.inspiration-heading{display:flex;justify-content:space-between;align-items:end;gap:18px;margin:0 0 13px}
+.inspiration-heading h2{font-size:clamp(22px,3vw,29px)}
+.inspiration-heading>span{font-size:9px;letter-spacing:.16em;color:var(--muted);font-weight:700;padding-bottom:4px}
+.inspiration-window{overflow:hidden;position:relative;margin:0 -2px;padding:3px 2px 12px;mask-image:linear-gradient(90deg,transparent,#000 2%,#000 98%,transparent)}
+.inspiration-track{display:flex;gap:14px;width:max-content;animation:lookbook-scroll 42s linear infinite}
+.inspiration-window:hover .inspiration-track{animation-play-state:paused}
+.inspiration-card{position:relative;flex:0 0 265px;height:164px;border-radius:19px;overflow:hidden;background:#dfd0c8;box-shadow:0 8px 22px rgba(57,39,32,.1)}
+.inspiration-card img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .7s cubic-bezier(.2,.7,.2,1),filter .5s}
+.inspiration-card:hover img{transform:scale(1.09);filter:saturate(1.08)}
+.inspiration-card::after{content:"";position:absolute;inset:35% 0 0;background:linear-gradient(transparent,rgba(25,17,15,.72))}
+.inspiration-card span{position:absolute;z-index:1;left:15px;bottom:13px;color:white;font-size:12px;font-weight:700;letter-spacing:.03em}
+@keyframes lookbook-scroll{from{transform:translateX(0)}to{transform:translateX(calc(-50% - 7px))}}
+@supports (animation-timeline: view()){
+  .inspiration-section,.stat.card,.timeline .appointment-row,.upcoming-block,.customer-row,.block-row,.page>.card{
+    animation:scroll-reveal linear both;
+    animation-timeline:view();
+    animation-range:entry 0% cover 24%;
+  }
+  @keyframes scroll-reveal{from{opacity:.25;transform:translateY(26px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+}
+@media(max-width:560px){
+  .hero-card{background-position:58% center}
+  .inspiration-heading{align-items:flex-start;flex-direction:column;gap:5px}
+  .inspiration-card{flex-basis:215px;height:140px}
+  .inspiration-track{gap:10px;animation-duration:34s}
+}
+@media(prefers-reduced-motion:reduce){
+  .inspiration-track{animation:none!important;transform:none}
+  .inspiration-window{overflow-x:auto;mask-image:none}
+  .inspiration-card img{transition:none}
+}
