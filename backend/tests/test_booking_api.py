@@ -13,6 +13,8 @@ pytestmark = pytest.mark.integration
 def setup_client():
     if not os.getenv('DATABASE_URL'):
         pytest.skip('DATABASE_URL is required for PostgreSQL integration tests')
+    os.environ.setdefault('OWNER_USERNAME', 'ci-owner')
+    os.environ.setdefault('OWNER_PASSWORD', 'ci-only-password')
     from app.main import app
     from app.db import SessionLocal
     from app.models import Style
@@ -20,7 +22,11 @@ def setup_client():
         style = db.scalar(select(Style).where(Style.name == 'Singles'))
         if not style:
             pytest.skip('Seeded Singles style is missing; run alembic upgrade head first')
-        return TestClient(app), style.id
+        client = TestClient(app)
+        login = client.post('/api/auth/login', json={'username': os.environ['OWNER_USERNAME'], 'password': os.environ['OWNER_PASSWORD']})
+        assert login.status_code == 200
+        client.headers.update({'Authorization': f"Bearer {login.json()['access_token']}"})
+        return client, style.id
 
 
 def payload(style_id, phone, day, start='10:00', end='14:00', price=300, deposit=150):
@@ -40,6 +46,17 @@ def cleanup(phones):
             db.execute(delete(Appointment).where(Appointment.customer_id == customer.id))
             db.delete(customer)
         db.commit()
+
+
+
+def test_owner_routes_require_sign_in():
+    client, _ = setup_client()
+    client.headers.pop('Authorization', None)
+    assert client.get('/api/appointments').status_code == 401
+    login = client.post('/api/auth/login', json={'username': os.environ['OWNER_USERNAME'], 'password': os.environ['OWNER_PASSWORD']})
+    assert login.status_code == 200
+    client.headers.update({'Authorization': f"Bearer {login.json()['access_token']}"})
+    assert client.get('/api/appointments').status_code == 200
 
 
 def test_valid_booking_creates_confirmed_appointment_and_deposit():
