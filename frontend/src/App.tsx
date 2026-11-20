@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { CalendarDays, CheckCircle2, Clock3, CreditCard, LayoutDashboard, Pencil, Phone, Plus, Search, Scissors, Trash2, UserRound, UsersRound, UserX, WalletCards, Ban } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock3, CreditCard, LayoutDashboard, Pencil, Phone, Plus, Search, Scissors, Trash2, UserRound, UsersRound, UserX, WalletCards, Ban, LogOut, LockKeyhole } from 'lucide-react'
 import { api } from './api'
 
 type Appointment = { id: string; customer_id?: string; customer_name: string; phone: string; style_id: string; style_name: string; date: string; start_time: string; expected_end_time: string; agreed_price: number; deposit_amount: number; balance: number; status: string; payment_status: string }
@@ -29,6 +29,9 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(new Date())
+  const [authenticated, setAuthenticated] = useState(() => Boolean(window.localStorage.getItem('judith_owner_token')))
+  const [login, setLogin] = useState({ username: '', password: '' })
+  const [loginError, setLoginError] = useState('')
   const [form, setForm] = useState({ customer_name: '', phone: '', style_id: '', date: today(), start_time: '10:00', agreed_price: '' })
   const [edit, setEdit] = useState({ customer_name: '', phone: '', style_id: '', date: '', start_time: '', expected_end_time: '', agreed_price: '' })
   const [payment, setPayment] = useState({ amount: '', payment_type: 'BALANCE', reference: '' })
@@ -40,7 +43,8 @@ export default function App() {
       setAppointments(a); setStyles(s); setCustomers(c); setBlocks(b); setError('')
     } catch (e: any) { setError(e?.message || 'Could not load the digital secretary data.') }
   }
-  useEffect(() => { void load(); const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer) }, [query])
+  useEffect(() => { void load(); const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer) }, [query, authenticated])
+  useEffect(() => { const expired = () => { setAuthenticated(false); setLoginError('Your session expired. Please sign in again.') }; window.addEventListener('judith-auth-expired', expired); return () => window.removeEventListener('judith-auth-expired', expired) }, [])
 
   const day = today()
   const todays = useMemo(() => appointments.filter(a => a.date === day && a.status !== 'CANCELLED').sort((a, b) => a.start_time.localeCompare(b.start_time)), [appointments, day])
@@ -56,9 +60,13 @@ export default function App() {
   async function recordPayment(e: FormEvent) { e.preventDefault(); if (!selected) return; await act(() => api.payment(selected.id, { amount: Number(payment.amount), payment_type: payment.payment_type, method: 'Orange Money', reference: payment.reference || null })); setPayment({ amount: '', payment_type: 'BALANCE', reference: '' }) }
   async function openCustomer(id: string) { try { setProfile(await api.customer(id)) } catch (e: any) { setError(e?.message || 'Could not open customer.') } }
   async function createBlock(e: FormEvent) { e.preventDefault(); await act(() => api.createBlockedTime(block)); setBlock({ ...block, start_time: '13:00', end_time: '14:00' }) }
+  async function signIn(e: FormEvent) { e.preventDefault(); setBusy(true); setLoginError(''); try { await api.login(login.username.trim(), login.password); setAuthenticated(true); setLogin({ username: '', password: '' }) } catch (err: any) { setLoginError(err?.message || 'Unable to sign in.') } finally { setBusy(false) } }
+  function signOut() { api.logout(); setAuthenticated(false); setAppointments([]); setCustomers([]); setBlocks([]) }
+
+  if (!authenticated) return <div className="login-screen"><form className="login-card" onSubmit={signIn}><div className="login-mark"><LockKeyhole /></div><p className="eyebrow">JUDITH'S HAIR ROOM</p><h1>Owner sign in</h1><p className="muted">Your salon desk is private. Sign in to manage bookings, customers and payments.</p>{loginError && <div className="alert">{loginError}</div>}<Field label="Username"><input required autoComplete="username" value={login.username} onChange={e => setLogin({ ...login, username: e.target.value })} /></Field><Field label="Password"><input required type="password" autoComplete="current-password" value={login.password} onChange={e => setLogin({ ...login, password: e.target.value })} /></Field><button className="primary wide" disabled={busy}>{busy ? 'Signing in…' : 'Sign in to dashboard'}</button></form></div>
 
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><div className="brand-mark"><Scissors /></div><div><p className="eyebrow">DIGITAL SECRETARY</p><h1>Judith's Hair Room</h1><p className="date-line">{now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div><div className={`status ${active ? 'occupied' : 'available'}`}><span />{active ? 'OCCUPIED' : 'AVAILABLE'}</div></header>
+    <header className="topbar"><div className="brand"><div className="brand-mark"><Scissors /></div><div><p className="eyebrow">DIGITAL SECRETARY</p><h1>Judith's Hair Room</h1><p className="date-line">{now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div><div className="topbar-actions"><div className={`status ${active ? 'occupied' : 'available'}`}><span />{active ? 'OCCUPIED' : 'AVAILABLE'}</div><button className="ghost signout" onClick={signOut}><LogOut /> Sign out</button></div></header>
     <main>{error && <div className="alert">{error}</div>}
       {tab === 'today' && <>
         <section className="hero-card"><div><p className="eyebrow">{active ? 'CURRENT CLIENT' : 'RIGHT NOW'}</p><h2>{active ? `Working with ${active.customer_name}` : next ? `Next: ${next.customer_name}` : "You're free"}</h2><p className="muted">{active ? `${active.style_name} · started ${active.start_time}` : next ? `${next.start_time} · ${next.style_name}` : 'No appointment is being worked on.'}</p></div>{active ? <button className="done" disabled={busy} onClick={() => void act(() => api.complete(active.id))}><CheckCircle2 /> DONE</button> : next ? <button className="primary" disabled={busy} onClick={() => void act(() => api.start(next.id))}><Clock3 /> START</button> : <button className="primary" onClick={() => setTab('book')}><Plus /> BOOK CLIENT</button>}</section>
