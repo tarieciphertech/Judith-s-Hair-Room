@@ -29,6 +29,8 @@ Production-oriented MVP for a one-person hair salon. The product is intentionall
 - REST endpoints for styles, appointments, availability, customers, payments, blocked time and dashboard.
 - Pydantic validation and consistent HTTP error responses.
 - CORS from environment variables.
+- Owner-only APIs require a signed 12-hour JWT; customer styles, availability checks and public booking remain accessible without owner credentials.
+- Owner credentials are configured only through `OWNER_USERNAME` and `OWNER_PASSWORD` environment variables on the backend. The frontend stores the short-lived token locally and never receives the password after login.
 
 ### Milestone 4 — Availability engine
 - Backend is the source of truth.
@@ -98,6 +100,9 @@ The existing Pages workflow builds `frontend/` and passes `VITE_API_URL` from th
 
 ## Security rules
 
+- Set `OWNER_USERNAME` and a long, unique `OWNER_PASSWORD` in Render before using `/admin`.
+- Set `CORS_ORIGINS` to the exact GitHub Pages origin (for example `https://tarieciphertech.github.io`) and any approved custom frontend origin; avoid wildcard origins in production.
+- Owner APIs reject requests without a valid bearer token; customer-facing styles, availability and booking endpoints remain public.
 - Do not commit `.env` files.
 - PostgreSQL credentials remain server-side.
 - Frontend may receive only public configuration such as `VITE_API_URL`.
