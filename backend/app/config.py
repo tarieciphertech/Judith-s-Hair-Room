@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     database_url: str
     secret_key: str
+    owner_username: str = ''
+    owner_password: str = ''
     cors_origins: list[str] = []
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
