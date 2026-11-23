@@ -101,3 +101,30 @@ button:active,.action-chip:active{transform:scale(.97)}
   .inspiration-window{overflow-x:auto;mask-image:none}
   .inspiration-card img{transition:none}
 }
+
+
+/* Immersive motion layer: ambient colour drift + reading progress */
+.app-shell::before{content:"";position:fixed;z-index:60;top:0;left:0;width:100%;height:3px;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,#9d6267,#d7a69a,#e8c9a6);box-shadow:0 1px 8px rgba(157,98,103,.3);pointer-events:none}
+@supports (animation-timeline:scroll()){
+  .app-shell::before{animation:page-progress linear both;animation-timeline:scroll(root block)}
+  @keyframes page-progress{to{transform:scaleX(1)}}
+}
+body{background-image:radial-gradient(ellipse at 12% 18%,rgba(236,207,198,.52),transparent 38%),radial-gradient(ellipse at 88% 76%,rgba(222,199,178,.35),transparent 35%),linear-gradient(135deg,#f7f1ec,#f3ece6 48%,#f8f1ec);background-size:140% 140%;animation:background-breathe 26s ease-in-out infinite alternate}
+@keyframes background-breathe{0%{background-position:0% 0%}100%{background-position:100% 100%}}
+.hero-card{background-size:cover,108% auto;animation:rise-in .65s .05s cubic-bezier(.2,.7,.2,1) both,hero-photo-drift 30s ease-in-out infinite alternate}
+@keyframes hero-photo-drift{from{background-position:center,48% 46%}to{background-position:center,56% 54%}}
+.inspiration-card{isolation:isolate}
+.inspiration-card img{will-change:transform}
+.inspiration-card:hover{box-shadow:0 14px 30px rgba(57,39,32,.18)}
+.inspiration-window{scroll-snap-type:x mandatory}
+.inspiration-card{scroll-snap-align:center}
+@media(max-width:560px){
+  .inspiration-window{overflow-x:auto;scrollbar-width:none}
+  .inspiration-window::-webkit-scrollbar{display:none}
+  .inspiration-track{width:max-content}
+}
+@media(prefers-reduced-motion:reduce){
+  body{animation:none!important;background-size:cover}
+  .hero-card{animation:rise-in .65s .05s both}
+  .app-shell::before{display:none}
+}
